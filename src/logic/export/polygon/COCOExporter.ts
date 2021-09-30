@@ -1,4 +1,4 @@
-import {ImageData, LabelName, LabelPolygon} from "../../../store/labels/types";
+import {ImageData, LabelName, LabelPolygon, LabelRect} from "../../../store/labels/types";
 import {LabelsSelector} from "../../../store/selectors/LabelsSelector";
 import {GeneralSelector} from "../../../store/selectors/GeneralSelector";
 import {ImageRepository} from "../../imageRepository/ImageRepository";
@@ -17,11 +17,11 @@ import {IPoint} from "../../../interfaces/IPoint";
 export type LabelDataMap = { [key: string]: number; }
 
 export class COCOExporter {
-    public static export(): void {
+    public static export(bbox: boolean): void {
         const imagesData: ImageData[] = LabelsSelector.getImagesData();
         const labelNames: LabelName[] = LabelsSelector.getLabelNames();
         const projectName: string = GeneralSelector.getProjectName();
-        const COCOObject: COCOObject = COCOExporter.mapImagesDataToCOCOObject(imagesData, labelNames, projectName);
+        const COCOObject: COCOObject = COCOExporter.mapImagesDataToCOCOObject(imagesData, labelNames, projectName, bbox);
         const content: string = JSON.stringify(COCOObject);
         const fileName: string = `${ExporterUtil.getExportFileName()}.json`;
         ExporterUtil.saveAs(content, fileName);
@@ -30,14 +30,25 @@ export class COCOExporter {
     private static mapImagesDataToCOCOObject(
         imagesData: ImageData[],
         labelNames: LabelName[],
-        projectName: string
+        projectName: string,
+        bbox: boolean
     ): COCOObject {
-        return {
-            "info": COCOExporter.getInfoComponent(projectName),
-            "images": COCOExporter.getImagesComponent(imagesData),
-            "annotations": COCOExporter.getAnnotationsComponent(imagesData, labelNames),
-            "categories":COCOExporter.getCategoriesComponent(labelNames)
-        }
+        if (bbox)
+            return {
+                "info": COCOExporter.getInfoComponent(projectName),
+                //"images": COCOExporter.getImagesComponent(imagesData),
+                "images": COCOExporter.getBBoxImagesComponent(imagesData),
+               // "annotations": COCOExporter.getAnnotationsComponent(imagesData, labelNames),
+                "annotations": COCOExporter.getBBoxAnnotationsComponent(imagesData, labelNames),
+                "categories":COCOExporter.getCategoriesComponent(labelNames)
+            }
+        else 
+            return {
+                "info": COCOExporter.getInfoComponent(projectName),
+                "images": COCOExporter.getImagesComponent(imagesData),
+                "annotations": COCOExporter.getAnnotationsComponent(imagesData, labelNames),
+                "categories":COCOExporter.getCategoriesComponent(labelNames)
+            }
     }
 
     public static getInfoComponent(description: string): COCOInfo {
@@ -70,6 +81,21 @@ export class COCOExporter {
             })
     }
 
+    public static getBBoxImagesComponent(imagesData: ImageData[]): COCOImage[] {
+        return imagesData
+            .filter((imagesData: ImageData) => imagesData.loadStatus)
+            .filter((imagesData: ImageData) => imagesData.labelRects.length !== 0)
+            .map((imageData: ImageData, index: number) => {
+                const image: HTMLImageElement = ImageRepository.getById(imageData.id);
+                return {
+                    "id": index + 1,
+                    "width": image.width,
+                    "height": image.height,
+                    "file_name": imageData.fileData.name
+                }
+            })
+    }
+
     public static getAnnotationsComponent(imagesData: ImageData[], labelNames: LabelName[]): COCOAnnotation[] {
         const labelsMap: LabelDataMap = COCOExporter.mapLabelsData(labelNames);
         let id = 0;
@@ -86,6 +112,33 @@ export class COCOExporter {
                         "segmentation": COCOExporter.getCOCOSegmentation(labelPolygon.vertices),
                         "bbox": COCOExporter.getCOCOBbox(labelPolygon.vertices),
                         "area": COCOExporter.getCOCOArea(labelPolygon.vertices)
+                    }
+                })
+            })
+        return flatten(annotations);
+    }
+    
+    public static getBBoxAnnotationsComponent(imagesData: ImageData[], labelNames: LabelName[]): COCOAnnotation[] {
+        const labelsMap: LabelDataMap = COCOExporter.mapLabelsData(labelNames);
+        let id = 0;
+        const annotations: COCOAnnotation[][] = imagesData
+            .filter((imagesData: ImageData) => imagesData.loadStatus)
+            .filter((imagesData: ImageData) => imagesData.labelRects.length !== 0)
+            .map((imageData: ImageData, index: number) => {
+                return imageData.labelRects.map((labelRect: LabelRect) => {
+                    return {
+                        "id": id++,
+                        "iscrowd": 0,
+                        "image_id": index + 1,
+                        "category_id": labelsMap[labelRect.labelId],
+                        "segmentation": null,
+                        "area": null,
+                        "bbox": [   
+                                    Math.round(labelRect.rect.x),
+                                    Math.round(labelRect.rect.y),
+                                    Math.round(labelRect.rect.width),
+                                    Math.round(labelRect.rect.height)
+                                ],
                     }
                 })
             })

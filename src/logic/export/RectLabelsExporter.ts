@@ -11,6 +11,7 @@ import {findIndex, findLast} from 'lodash';
 import {ISize} from '../../interfaces/ISize';
 import {NumberUtil} from '../../utils/NumberUtil';
 import {RectUtil} from '../../utils/RectUtil';
+import {COCOExporter} from "./polygon/COCOExporter";
 
 export class RectLabelsExporter {
     public static export(exportFormatType: AnnotationFormatType): void {
@@ -23,6 +24,9 @@ export class RectLabelsExporter {
                 break;
             case AnnotationFormatType.CSV:
                 RectLabelsExporter.exportAsCSV();
+                break;
+            case AnnotationFormatType.COCO:
+                RectLabelsExporter.exportAsCOCO();
                 break;
             default:
                 return;
@@ -181,6 +185,10 @@ export class RectLabelsExporter {
             .join('\n');
         const fileName: string = `${ExporterUtil.getExportFileName()}.csv`;
         ExporterUtil.saveAs(content, fileName);
+    }
+    
+    private static exportAsCOCO(): void {
+        COCOExporter.export(true)
     }
 
     private static wrapRectLabelsIntoCSV(imageData: ImageData): string {

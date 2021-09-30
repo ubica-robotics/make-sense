@@ -9,7 +9,7 @@ export class PolygonLabelsExporter {
                 VGGExporter.export();
                 break;
             case AnnotationFormatType.COCO:
-                COCOExporter.export();
+                COCOExporter.export(false);
                 break;
             default:
                 return;
